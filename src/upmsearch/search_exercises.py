@@ -9,6 +9,16 @@ def exercise1(tasks=0, resources=0, task_duration=[], task_resource=[], task_dep
     :param task_dependencies: list of dependencies (expressed as binary tuples) between tasks
     :return: list with the start time of each task in the best solution found, or empty list if no solution was found
     """
+
+    from upmproblems import rcpsp06
+    
+
+# Now you can call the functions to get your data
+    tasks = rcpsp06.task_data.get_tasks()
+    resources = rcpsp06.task_data.get_resources()
+    task_duration = rcpsp06.task_data.get_task_duration()
+    task_resource = rcpsp06.task_data.get_task_resource()
+    task_dependencies = rcpsp06.task_data.get_task_dependencies()
     return []
 
 
