@@ -1,11 +1,4 @@
 import heapq
-from ..upmproblems.rcpsp06 import get_tasks, get_resources, get_task_duration, get_task_resource, get_task_dependencies
-
-tasks = get_tasks()
-resources = get_resources()
-task_duration = get_task_duration()
-task_resource = get_task_resource()
-task_dependencies = get_task_dependencies()
 
 class Node:
     def __init__(self, task_order, resource_usage, bound):
@@ -82,6 +75,12 @@ def rcpsp_branch_and_bound(tasks, resource_constraints, precedence_constraints):
                 heapq.heappush(priority_queue, new_node)
 
     return best_schedule
+
+# Example usage
+task_duration = [3, 4, 2, 2, 1, 4]
+task_resource = [2, 3, 4, 4, 3, 2]
+task_dependencies = [(1, 3), (2, 3), (2, 4), (3, 5), (4, 6)]
+resources = 4
 
 
 tasks_list = [(duration, [req] * resources) for duration, req in zip(task_duration, task_resource)]
