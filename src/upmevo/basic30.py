@@ -1,6 +1,6 @@
 import random
 
-# Define the RCPSP parameters
+# Define problem parameters
 tasks = 30
 resources = 28
 task_duration = [5, 3, 1, 1, 5, 2, 2, 8, 9, 1,
@@ -16,126 +16,117 @@ task_dependencies = [(1, 4), (2, 5), (2, 16), (2, 25), (3, 9), (3, 13),
                      (14, 18), (14, 28), (15, 25), (15, 26), (16, 26), (16,27),
                      (17, 18), (17, 24), (18, 27), (19, 24), (20, 29), (21, 23),
                      (22, 30), (23, 27), (24, 30), (25, 28), (26, 29), (27, 29)]
-num_generations = 100
-population_size = 20
-mutation_rate = 0.1
-crossover_rate = 0.8
+population_size = 50
+generations = 100
+mutation_rate = 0.2
+max_no_improvement = 10  # Termination condition: Stop if no improvement for this many generations
 
-# Initialize random seed
-random_seed = random.randint(1, 5)
-random.seed(random_seed)
+# Generate a random seed from 0 to 10
+seed = random.randint(0, 10)
+random.seed(seed)
 
-class Node:
-    def __init__(self, task_order, resource_usage, cost, estimate):
-        self.task_order = task_order
-        self.resource_usage = resource_usage
-        self.cost = cost  # Actual cost to reach the current node
-        self.estimate = estimate  # Estimated cost to reach the goal from the current node
-        self.total_cost = cost + estimate  # Total estimated cost
+# Initialize a population of schedules
+def initialize_population(population_size):
+    population = []
+    for _ in range(population_size):
+        schedule = random.sample(range(1, tasks + 1), tasks)
+        population.append(schedule)
+    return population
 
-    def __lt__(self, other):
-        return self.total_cost < other.total_cost
+# Calculate makespan for a schedule
+def calculate_makespan(schedule):
+    task_finish_time = [0] * tasks
+    for task in schedule:
+        dependencies = [dependency for dependency in task_dependencies if dependency[1] == task]
+        if dependencies:
+            start_time = max(task_finish_time[dependency[0] - 1] for dependency in dependencies)
+        else:
+            start_time = 0
+        end_time = start_time + task_duration[task - 1]
+        
+        # Check for resource availability and non-overlapping tasks
+        resource = task_resource[task - 1]
+        if all(task_finish_time[i] <= start_time or task_resource[i] != resource for i in range(task)):
+            task_finish_time[task - 1] = end_time
+        else:
+            # If there's an overlap, adjust the start time
+            start_time = max(task_finish_time[i] for i in range(task))
+            end_time = start_time + task_duration[task - 1]
+            task_finish_time[task - 1] = end_time
+    return max(task_finish_time)
+
+# Selection: Tournament selection
+def tournament_selection(population, k=5):
+    selected = random.sample(population, k)
+    return min(selected, key=calculate_makespan)
+
+# Crossover: Two-point crossover with non-overlapping constraint
+def crossover(parent1, parent2):
+    point1, point2 = random.sample(range(1, tasks), 2)
+    if point1 > point2:
+        point1, point2 = point2, point1
+    
+    # Ensure non-overlapping tasks
+    child1 = [task for task in parent1 if task not in parent2[point1:point2]]
+    child2 = [task for task in parent2 if task not in parent1[point1:point2]]
+    
+    return child1[:point1] + parent2[point1:point2] + child1[point1:], child2[:point1] + parent1[point1:point2] + child2[point1:]
+
+# Mutation: Swap mutation with non-overlapping constraint
+def mutate(schedule):
+    if random.random() < mutation_rate:
+        point1, point2 = random.sample(range(tasks), 2)
+        
+        # Ensure non-overlapping tasks
+        while schedule[point1] in schedule[point2:point2 + 2] or schedule[point2] in schedule[point1:point1 + 2]:
+            point1, point2 = random.sample(range(tasks), 2)
+        
+        schedule[point1], schedule[point2] = schedule[point2], schedule[point1]
+    return schedule
+
+# Define a function to select the best population
+def select_best_population(population, size):
+    return sorted(population, key=calculate_makespan)[:size]
 
 # Genetic Algorithm
-def initialize_population(size, num_tasks):
-    population = []
-    for _ in range(size):
-        individual = list(range(num_tasks))
-        random.shuffle(individual)
-        population.append(individual)
-    return population
-def calculate_bound(node, tasks, resource_constraints):
-    remaining_resources = list(resource_constraints)
-    makespan = 0
-    start_time = [0] * len(tasks)
-    
-    for task in node.task_order:
-        task_duration, task_resource_req = tasks[task]
-        earliest_start_time = max(start_time[task], makespan)
-        
-        resource_available = True
-        for resource in range(len(resource_constraints)):
-            if remaining_resources[resource] < task_resource_req[resource]:
-                resource_available = False
-                break
-        
-        if resource_available:
-            makespan = earliest_start_time + task_duration
-            for resource in range(len(resource_constraints)):
-                remaining_resources[resource] -= task_resource_req[resource]
-        start_time[task] = earliest_start_time
-    
-    lower_bound = makespan
-    return lower_bound
-
-def calculate_fitness(individual, tasks, resource_constraints, precedence_constraints):
-    # Fitness is the inverse of the makespan
-    node = Node(individual, [0] * resources, 0, 0)
-    makespan = calculate_bound(node, tasks, resource_constraints)
-    return 1 / makespan if makespan > 0 else 0
-
-def select_parents(population, fitnesses):
-    # Select parents using roulette wheel selection
-    total_fitness = sum(fitnesses)
-    selection_probs = [fitness / total_fitness for fitness in fitnesses]
-    return random.choices(population, weights=selection_probs, k=2)
-
-def crossover(parent1, parent2, rate):
-    if random.random() < rate:
-        # One-point crossover
-        point = random.randint(1, len(parent1) - 1)
-        return parent1[:point] + parent2[point:], parent2[:point] + parent1[point:]
-    else:
-        return parent1, parent2
-
-def mutate(individual, rate):
-    for i in range(len(individual)):
-        if random.random() < rate:
-            j = random.randint(0, len(individual) - 1)
-            individual[i], individual[j] = individual[j], individual[i]
-    return individual
-
 def genetic_algorithm():
-    # Initialize population
-    population = initialize_population(population_size, len(task_duration))
-    best_individual = None
-    best_fitness = 0
+    population = initialize_population(population_size)
+    best_schedule = population[0]
+    best_makespan = calculate_makespan(best_schedule)
+    no_improvement_count = 0
 
-    for _ in range(num_generations):
-        # Calculate fitness for each individual
-        fitnesses = [calculate_fitness(individual, tasks, resource_constraints, precedence_constraints) for individual in population]
-        
-        # Check for new best individual
-        for individual, fitness in zip(population, fitnesses):
-            if fitness > best_fitness:
-                best_individual = individual
-                best_fitness = fitness
-
+    for generation in range(generations):
         new_population = []
-        while len(new_population) < population_size:
-            # Selection
-            parent1, parent2 = select_parents(population, fitnesses)
-            
-            # Crossover
-            child1, child2 = crossover(parent1, parent2, crossover_rate)
-            
-            # Mutation
-            child1 = mutate(child1, mutation_rate)
-            child2 = mutate(child2, mutation_rate)
-            
+        for _ in range(population_size):
+            parent1 = tournament_selection(population)
+            parent2 = tournament_selection(population)
+            child1, child2 = crossover(parent1, parent2)
+            child1 = mutate(child1)
+            child2 = mutate(child2)
             new_population.extend([child1, child2])
+        
+        # Keep the best solution found
+        new_population.append(best_schedule)
 
-        population = new_population[:population_size]
+        # Select the best solutions for the next generation
+        population = select_best_population(new_population, population_size)
+        
+        # Check for improvement in best makespan
+        new_makespan = calculate_makespan(population[0])
+        if new_makespan < best_makespan:
+            best_schedule = population[0]
+            best_makespan = new_makespan
+            no_improvement_count = 0
+        else:
+            no_improvement_count += 1
 
-    return best_individual, 1 / best_fitness if best_fitness > 0 else float('inf')
+        # Termination condition: Stop if no improvement for a certain number of generations
+        if no_improvement_count >= max_no_improvement:
+            break
 
-# Adjusting the given parameters for the algorithm
-tasks = [(task_duration[i], [task_resource[i]] * resources) for i in range(len(task_duration))]
-resource_constraints = [max(task_resource)] * resources  # Assuming a default resource capacity
-precedence_constraints = [(a-1, b-1) for a, b in task_dependencies]
+    return best_schedule, best_makespan
 
-# Running the Genetic Algorithm
 best_schedule, makespan = genetic_algorithm()
-print("Best schedule:", best_schedule)
+print("Best Schedule:", best_schedule)
 print("Makespan:", makespan)
-print("Random Seed Used:", random_seed)
+print("Random Seed:", seed)
