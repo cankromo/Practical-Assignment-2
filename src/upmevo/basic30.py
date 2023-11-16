@@ -22,7 +22,7 @@ mutation_rate = 0.1
 crossover_rate = 0.8
 
 # Initialize random seed
-random_seed = random.randint(1, 1000)
+random_seed = random.randint(1, 5)
 random.seed(random_seed)
 
 class Node:
